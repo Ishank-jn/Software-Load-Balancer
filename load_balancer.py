@@ -6,15 +6,17 @@ import threading
 import requests
 import syslog
 import datetime
-from flask import Flask, request, Response, g
+from flask import Flask, request, Response
 from server import Server
 from round_robin import RoundRobin
-from utility import load_config, health_check, next_server_least_active
+from utility import load_config, next_server_least_active
 
 app = Flask(__name__)
 
 # if using round robin LB
 round_robin = None
+# Backend server List
+servers = []
 # check for new servers
 update_server_list = False
 # Store the currently configured load balancing algorithm
@@ -25,11 +27,11 @@ def proxy_request():
     """
         Routes incoming requests to the appropriate server based on the load balancing algorithm.
     """
-    global lb_type
+    global lb_type, servers
 
     if lb_type == "least_connections":
         # Select the server with the least active connections
-        server = next_server_least_active(g.servers)
+        server = next_server_least_active(servers)
         # Acquire the server's mutex to manage active connections
         with server.Mutex:
             server.ActiveConnections += 1
@@ -48,7 +50,7 @@ def proxy_request():
         # Select next server in round robin order
         server = round_robin.get_next_server()
         if not round_robin or update_server_list:
-            round_robin.update_servers(g.servers)
+            round_robin.update_servers(servers)
             update_server_list = False
 
         if not server:
@@ -69,13 +71,13 @@ def upload_server():
     Endpoint to upload a new server to the load balancer.
     Expects JSON data in the request body with the server URL.
     """
-    global upload_server_list
+    global upload_server_list, servers
     data = request.json
     new_server_url = data.get('url')
     if new_server_url:
         upload_server_list = True
         new_server = Server(new_server_url)
-        g.servers.append(new_server)
+        servers.append(new_server)
         new_server.start_health_check(config.HealthCheckInterval)  # Start health check thread for new server
         return {'message': 'Server uploaded successfully'}, 200
     else:
@@ -87,14 +89,14 @@ def delete_server():
     Endpoint to delete a server from the load balancer.
     Expects JSON data in the request body with the server URL.
     """
-    global update_server_list
+    global update_server_list, servers
     data = request.json
     server_url_to_delete = data.get('url')
     if server_url_to_delete:
-        for server in g.servers:
+        for server in servers:
             if server.URL.geturl() == server_url_to_delete:
                 server.stop_health_check()  # Stop health check thread for the server
-                g.servers.remove(server)
+                servers.remove(server)
                 update_server_list = True
                 return {'message': 'Server deleted successfully'}, 200
         return {'error': 'Server not found'}, 404
@@ -107,14 +109,14 @@ if __name__ == "__main__":
     health_check_interval = int(config.HealthCheckInterval)
     lb_type = config.LBAlgorithm
 
-    g.servers = [Server(server_url) for server_url in config.Servers]
+    servers = [Server(server_url) for server_url in config.Servers]
     # Start health check on the servers
-    for server in g.servers:
+    for server in servers:
         server.start_health_check()
 
     # Initialize round_robin object only if the algorithm is set to round_robin
     if not round_robin and lb_type == 'round_robin':
-        round_robin = RoundRobin(g.servers)
+        round_robin = RoundRobin(servers)
 
     # open log
     syslog.openlog(ident="LoadBalancer", logoption=syslog.LOG_PID, facility=syslog.LOG_LOCAL0)
