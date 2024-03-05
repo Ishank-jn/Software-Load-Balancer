@@ -1,12 +1,12 @@
-##############
+################
 # Load Balancer
-##############
+################
 
 import threading
 import requests
 import syslog
 import datetime
-from flask import Flask, request, Response
+from flask import Flask, request, Response, g
 from server import Server
 from round_robin import RoundRobin
 from utility import load_config, health_check, next_server_least_active
@@ -28,7 +28,7 @@ def proxy_request():
 
     if lb_type == "least_connections":
         # Select the server with the least active connections
-        server = next_server_least_active(servers)
+        server = next_server_least_active(g.servers)
         # Acquire the server's mutex to manage active connections
         with server.Mutex:
             server.ActiveConnections += 1
@@ -69,7 +69,7 @@ def upload_server():
     new_server_url = data.get('url')
     if new_server_url:
         new_server = Server(new_server_url)
-        servers.append(new_server)
+        g.servers.append(new_server)
         return {'message': 'Server uploaded successfully'}, 200
     else:
         return {'error': 'URL not provided'}, 400
@@ -83,9 +83,9 @@ def delete_server():
     data = request.json
     server_url_to_delete = data.get('url')
     if server_url_to_delete:
-        for server in servers:
+        for server in g.servers:
             if server.URL.geturl() == server_url_to_delete:
-                servers.remove(server)
+                g.servers.remove(server)
                 return {'message': 'Server deleted successfully'}, 200
         return {'error': 'Server not found'}, 404
     else:
@@ -97,12 +97,12 @@ if __name__ == "__main__":
     health_check_interval = int(config.HealthCheckInterval)
     lb_type = config.LBAlgorithm
 
-    servers = [Server(server_url) for server_url in config.Servers]
+    g.servers = [Server(server_url) for server_url in config.Servers]
     # Initialize round_robin object only if the algorithm is set to round_robin
     if not round_robin and lb_type == 'round_robin':
-        round_robin = RoundRobin(servers)
+        round_robin = RoundRobin(g.servers)
 
-    for server in servers:
+    for server in g.servers:
         threading.Thread(target=health_check, args=(server, health_check_interval), daemon=True).start()
 
     # open log
