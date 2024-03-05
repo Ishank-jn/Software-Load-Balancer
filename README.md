@@ -9,8 +9,8 @@ This project implements a simple load balancer using Flask in Python. The load b
 - **Dynamic Server Management**: API endpoints are provided to dynamically upload and delete available servers from the load balancer.
 
 ## Load Balancing Algorithms:
-- Round Robin: The load balancer iterates through a group of backend-servers, dispatching requests to each one sequentially. Once it reaches the end of the list, it loops back to the beginning to continue the cycle. Round Robin is a static load balancing algorithm.
-- Least Connections (default): This method directs traffic towards the server with the least active connections. This is particularly beneficial in scenarios where the duration to process requests can fluctuate significantly. Least Connections is a dynamic load balancing algorithm.
+- **Round Robin**: The load balancer iterates through a group of backend-servers, dispatching requests to each one sequentially. Once it reaches the end of the list, it loops back to the beginning to continue the cycle. Round Robin is a static load balancing algorithm.
+- **Least Connections (default)**: This method directs traffic towards the server with the least active connections. This is particularly beneficial in scenarios where the duration to process requests can fluctuate significantly. Least Connections is a dynamic load balancing algorithm.
 
 ## How to Use
 
