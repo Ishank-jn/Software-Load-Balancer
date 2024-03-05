@@ -6,13 +6,19 @@ import threading
 import requests
 import syslog
 import datetime
+import signal
+import sys
 from flask import Flask, request, Response
+from prometheus_client import start_http_server, Counter, Gauge
 from server import Server
 from round_robin import RoundRobin
 from utility import load_config, next_server_least_active
 
 app = Flask(__name__)
 
+# Prometheus metrics
+REQUESTS_TOTAL = Counter('http_requests_total', 'Total number of HTTP requests')
+ACTIVE_CONNECTIONS = Gauge('active_connections', 'Number of active connections')
 # if using round robin LB
 round_robin = None
 # Backend server List
@@ -35,8 +41,12 @@ def proxy_request():
         # Acquire the server's mutex to manage active connections
         with server.Mutex:
             server.ActiveConnections += 1
+
+        ACTIVE_CONNECTIONS.inc()
+        REQUESTS_TOTAL.inc
+
         # Forward to appropiate backend server
-        response = requests.get(server.URL.geturl() + request.full_path)
+        response = requests.get(server.URL.geturl() + request.full_path, timeout=5)
         # Release the server's mutex
         with server.Mutex:
             server.ActiveConnections -= 1
@@ -55,6 +65,10 @@ def proxy_request():
 
         if not server:
             return Response("Internal Server Error", status=500)
+        
+        ACTIVE_CONNECTIONS.inc()
+        REQUESTS_TOTAL.inc
+
         # Forward to appropiate backend server
         response = requests.get(server.URL.geturl() + request.full_path)
 
@@ -103,6 +117,11 @@ def delete_server():
     else:
         return {'error': 'URL not provided'}, 400
 
+
+def signal_handler(sig, frame):
+    syslog.syslog(syslog.LOG_INFO, f"[{datetime.now()}] Received termination signal. Shutting down gracefully.")
+    sys.exit(0)
+
 if __name__ == "__main__":
     # Load LB config
     config = load_config("config.json")
@@ -122,6 +141,12 @@ if __name__ == "__main__":
     syslog.openlog(ident="LoadBalancer", logoption=syslog.LOG_PID, facility=syslog.LOG_LOCAL0)
     syslog.syslog(syslog.LOG_INFO, f"[{datetime.now()}] Starting server on port {config.ListenPort}")
 
+     # Register signal handler for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+
+    # Start Prometheus metrics server
+    start_http_server(8000)  # Expose metrics on port 8000
+    
     app.run(port=int(config.ListenPort))
 
     # Close syslog connection (would be automatically closed at program exit)
