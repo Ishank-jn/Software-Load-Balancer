@@ -37,3 +37,13 @@ class RoundRobin:
                     break
         # If no healthy server is found, return None
         return None
+    
+    def update_servers(self, servers):
+        """
+        Updates the server list.
+
+        Returns:
+            Server: The next server to handle the request.
+        """
+        with self.mutex:  # Acquire the lock
+            self.servers = servers

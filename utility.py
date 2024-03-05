@@ -1,25 +1,10 @@
 import json
-import time
-import requests
-import syslog
 from config import Config
 
 def load_config(filename):
     with open(filename, 'r') as file:
         data = json.load(file)
         return Config(data['healthCheckInterval'], data['servers'], data['listenPort'])
-
-
-def health_check(server, interval):
-    while True:
-        try:
-            response = requests.get(server.URL.geturl())
-            server.Healthy = response.status_code < 500
-        except Exception as e:
-            server.Healthy = False
-            syslog.syslog(syslog.LOG_ERR, f"Health check failed for server {server.URL.geturl()}: {str(e)}")
-        time.sleep(interval)
-
 
 def next_server_least_active(servers):
     least_active_connections = -1
