@@ -1,5 +1,5 @@
 ##############
-# Load Balancer with Least Active Connections Algo
+# Load Balancer
 ##############
 
 import threading
