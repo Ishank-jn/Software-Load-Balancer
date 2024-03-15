@@ -65,7 +65,7 @@ def proxy_request():
             update_server_list = False
 
         ACTIVE_CONNECTIONS.inc()
-        REQUESTS_TOTAL.inc
+        REQUESTS_TOTAL.inc()
         
         if not server:
             ACTIVE_CONNECTIONS.dec()
