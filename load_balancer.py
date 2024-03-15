@@ -43,7 +43,7 @@ def proxy_request():
             server.ActiveConnections += 1
 
         ACTIVE_CONNECTIONS.inc()
-        REQUESTS_TOTAL.inc
+        REQUESTS_TOTAL.inc()
 
         # Forward to appropiate backend server
         response = requests.get(server.URL.geturl() + request.full_path, timeout=5)
@@ -53,6 +53,7 @@ def proxy_request():
 
         syslog.syslog(syslog.LOG_INFO, f"[{datetime.now()}] Request handled by {server.URL.geturl()} - \
                       Status code: {response.status_code}")
+        ACTIVE_CONNECTIONS.dec()
         return response.content, response.status_code
     
     elif lb_type == "round_robin":
@@ -63,17 +64,19 @@ def proxy_request():
             round_robin.update_servers(servers)
             update_server_list = False
 
-        if not server:
-            return Response("Internal Server Error", status=500)
-        
         ACTIVE_CONNECTIONS.inc()
         REQUESTS_TOTAL.inc
+        
+        if not server:
+            ACTIVE_CONNECTIONS.dec()
+            return Response("Internal Server Error", status=500)
 
         # Forward to appropiate backend server
         response = requests.get(server.URL.geturl() + request.full_path)
 
         syslog.syslog(syslog.LOG_INFO, f"[{datetime.now()}] Request handled by {server.URL.geturl()} - \
                       Status code: {response.status_code}")
+        ACTIVE_CONNECTIONS.dec()
         return response.content, response.status_code
     else:
         syslog.syslog(syslog.LOG_ERR, f"[{datetime.now()}] Load Balancer not configured properly")
